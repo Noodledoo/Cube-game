@@ -1,11 +1,11 @@
 """
-Network module - multiplayer support
+Cube Boss Fight Game
 """
 
-from network.protocol import MessageType, NetworkMessage, serialize_message, deserialize_message
-from network.client import NetworkClient, OfflineClient
-from network.server import GameServer, BotAI
-from network.bot import StandaloneBot
+from protocol import MessageType, NetworkMessage, serialize_message, deserialize_message
+from client import NetworkClient, OfflineClient
+from server import GameServer, BotAI
+from bot import StandaloneBot
 
 __all__ = [
     "MessageType",

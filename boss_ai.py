@@ -9,7 +9,7 @@ Fixes:
 import math
 import time
 import random
-from game.scaling import ScalingFormulas
+from scaling import ScalingFormulas
 
 class BossAI:
     """Boss behavior and all attack patterns"""
