@@ -156,6 +156,8 @@ class Player:
         cd = max(0.08, 0.35 - (self.save_data["upgrades"]["firerate"] - 1) * 0.07)
         if self.save_data["upgrades"]["rapid"]:
             cd *= 0.5
+        if self.save_data["upgrades"]["bulletstorm"]:
+            cd *= 0.35
         if self.save_data["upgrades"]["infiniteammo"]:
             cd = 0.02
         

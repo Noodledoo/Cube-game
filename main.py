@@ -42,8 +42,12 @@ from protocol import MessageType
 
 class Game:
     """Main game controller with complete feature integration and multiplayer support"""
-    
-    def __init__(self, mode: GameMode = GameMode.SINGLEPLAYER, 
+
+    @property
+    def is_multiplayer_mode(self):
+        return self.mode in (GameMode.MULTIPLAYER, GameMode.MULTIPLAYER_COOP, GameMode.PVP)
+
+    def __init__(self, mode: GameMode = GameMode.SINGLEPLAYER,
                  host_server: bool = False, server_address: str = "127.0.0.1",
                  server_port: int = 5555):
         pygame.init()
@@ -56,7 +60,6 @@ class Game:
         self.session_state = SessionState.MENU
         
         # Load appropriate save data based on mode
-        self.is_multiplayer_mode = mode in [GameMode.MULTIPLAYER, GameMode.MULTIPLAYER_COOP, GameMode.PVP]
         if self.is_multiplayer_mode:
             self.save_data = load_multiplayer_save()
         else:
@@ -94,11 +97,11 @@ class Game:
         self.server_port = server_port
         
         # Host server if requested
-        if host_server and mode == GameMode.MULTIPLAYER:
+        if host_server and self.is_multiplayer_mode:
             self._start_server()
-        
+
         # Setup network client based on mode
-        if mode == GameMode.MULTIPLAYER:
+        if self.is_multiplayer_mode:
             self.network_client = NetworkClient()
             self._setup_network_handlers()
         else:
@@ -106,7 +109,19 @@ class Game:
         
         # Register abilities
         self._register_abilities()
-        
+
+        # Restore ability stacks from save_data
+        for ability_name, stacks in self.save_data.get("abilities", {}).items():
+            if stacks > 0 and ability_name in self.ability_manager.registry:
+                reg = self.ability_manager.registry[ability_name]
+                ab = Ability(
+                    name=reg.name, description=reg.description,
+                    rarity=reg.rarity, cooldown=reg.cooldown,
+                    key=reg.key, stacks=stacks, max_stacks=reg.max_stacks
+                )
+                self.ability_manager.player_abilities[ability_name] = ab
+                self.ability_manager.last_used[ability_name] = -999.0
+
         # Set console callback with save_data reference
         self.console.set_execute_callback(self._execute_console_command)
         self.console.set_save_data(self.save_data)
@@ -173,9 +188,7 @@ class Game:
         """Handle chat message from server"""
         sender = message.data.get("sender", "Unknown")
         msg = message.data.get("message", "")
-        print(f"Client: Received chat from {sender}: {msg}")
         self.ui_manager.add_chat_message(sender, msg)
-        print(f"Client: Added to chat window, total messages: {len(self.ui_manager.chat_messages)}")
     
     def _on_player_join(self, message):
         """Handle player join"""
@@ -271,7 +284,7 @@ class Game:
             return "Error: Must be in multiplayer mode or hosting"
         
         elif cmd == "removebot":
-            if self.mode == GameMode.MULTIPLAYER and self.network_client:
+            if self.is_multiplayer_mode and isinstance(self.network_client, NetworkClient) and self.network_client.connected:
                 bot_id = parts[1] if len(parts) > 1 else None
                 self.network_client.send(MessageType.REMOVE_BOT, {"bot_id": bot_id})
                 return "Request sent to remove bot"
@@ -284,7 +297,7 @@ class Game:
             return "Error: Must be in multiplayer mode or hosting"
         
         elif cmd == "botcount":
-            if self.mode == GameMode.MULTIPLAYER and self.network_client:
+            if self.is_multiplayer_mode and isinstance(self.network_client, NetworkClient):
                 # Count bots in other_players + own server knowledge if hosting
                 count = 0
                 for data in self.other_players.values():
@@ -296,7 +309,7 @@ class Game:
             return "Server not running"
         
         elif cmd == "listbots":
-            if self.mode == GameMode.MULTIPLAYER:
+            if self.is_multiplayer_mode:
                 bots = []
                 for pid, data in self.other_players.items():
                     if data.get("is_bot"):
@@ -423,6 +436,9 @@ class Game:
             ability = action["ability"]
             self.ability_manager.select_ability(ability)
             self.save_data["ability_picks_used"] += 1
+            # Sync ability stacks to save_data so game code can read them
+            for name, ab in self.ability_manager.player_abilities.items():
+                self.save_data["abilities"][name] = ab.stacks
             save_progress(self.save_data)
         
         elif action_type == "roll_temple":
@@ -474,16 +490,12 @@ class Game:
             name = action.get("name") or self.ui_manager.player_name_input or "Player"
             mode = action.get("mode", "coop")  # coop or pvp
             
-            print(f"Attempting to connect to {ip}:{port} as {name} (mode: {mode})")
-            
             # Create NetworkClient if we don't have one or if it's OfflineClient
             if not isinstance(self.network_client, NetworkClient):
-                print("Creating new NetworkClient")
                 self.network_client = NetworkClient()
                 self._setup_network_handlers()
-            
+
             if self.network_client.connect(ip, port, name):
-                print("Connected successfully")
                 self.ui_manager.set_connection_status("connected")
                 # Set mode based on action
                 if mode == "pvp":
@@ -491,11 +503,9 @@ class Game:
                 else:
                     self.mode = GameMode.MULTIPLAYER_COOP
             else:
-                print("Connection failed")
                 self.ui_manager.set_connection_status("error", "Connection failed")
-        
+
         elif action_type == "disconnect":
-            print("Disconnecting...")
             if self.network_client:
                 self.network_client.disconnect()
             # Switch back to OfflineClient
@@ -505,34 +515,25 @@ class Game:
         
         elif action_type == "send_chat":
             message = action.get("message", "")
-            print(f"Sending chat message: {message}")
             if self.network_client and isinstance(self.network_client, NetworkClient) and self.network_client.connected:
                 self.network_client.send_chat(message)
-                print("Chat message sent to server")
-            else:
-                print("Cannot send chat - not connected")
         
         elif action_type == "host_game":
             port = action.get("port", 5555)
             name = action.get("name") or self.ui_manager.player_name_input or "Player"
             mode = action.get("mode", "coop")  # coop or pvp
             
-            print(f"Attempting to host game on port {port} as {name} (mode: {mode})")
-            
             if not self.game_server:
                 self.server_port = port
                 self._start_server()
                 if self.game_server:
-                    print("Server started, connecting client...")
                     # Create NetworkClient if we don't have one or if it's OfflineClient
                     if not isinstance(self.network_client, NetworkClient):
-                        print("Creating new NetworkClient for host")
                         self.network_client = NetworkClient()
                         self._setup_network_handlers()
-                    
+
                     # Connect to own server
                     if self.network_client.connect("127.0.0.1", port, name):
-                        print("Host connected successfully")
                         self.ui_manager.set_connection_status("hosting")
                         # Set mode based on action
                         if mode == "pvp":
@@ -540,7 +541,6 @@ class Game:
                         else:
                             self.mode = GameMode.MULTIPLAYER_COOP
                     else:
-                        print("Failed to connect host client to server")
                         self.ui_manager.set_connection_status("error", "Failed to connect to local server")
                 else:
                     print("Failed to start server")
@@ -742,7 +742,7 @@ class Game:
         self.player.update(raw_dt, self.game_state.level, self.boss_state)
         
         # Send player state to server
-        if self.mode == GameMode.MULTIPLAYER and self.network_client:
+        if self.is_multiplayer_mode and isinstance(self.network_client, NetworkClient) and self.network_client.connected:
             self.network_client.send_player_state(
                 self.player_state.x,
                 self.player_state.y,
@@ -972,7 +972,7 @@ class Game:
                     self.mp_session_damage += projectile["dmg"]
                 
                 # Send to server in multiplayer
-                if self.mode == GameMode.MULTIPLAYER and self.network_client:
+                if self.is_multiplayer_mode and isinstance(self.network_client, NetworkClient) and self.network_client.connected:
                     self.network_client.send_boss_hit(projectile["dmg"])
                 
                 # Lifesteal
@@ -1060,11 +1060,23 @@ class Game:
     
     def render(self):
         """Main render loop"""
-        self.screen.fill((8, 8, 35))
-        
+        # Apply screen shake offset during game
+        shake_x, shake_y = self.animation_manager.get_shake_offset()
+        if self.game_state.screen_state == "GAME" and (shake_x or shake_y):
+            self.screen.fill((0, 0, 0))
+            game_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            game_surface.fill((8, 8, 35))
+            # Temporarily redirect rendering to game_surface
+            original_screen = self.screen
+            self.screen = game_surface
+            self.renderer.screen = game_surface
+        else:
+            self.screen.fill((8, 8, 35))
+            original_screen = None
+
         # Render based on state
         action = None
-        
+
         if self.game_state.screen_state == "MENU":
             action = self.ui_manager.render_menu(self.game_state)
         
@@ -1101,7 +1113,7 @@ class Game:
                                         self.boss_ai, self.player, self.animation_manager,
                                         self.ability_manager, self.save_data)
                 # Render other players in multiplayer
-                if self.mode == GameMode.MULTIPLAYER:
+                if self.is_multiplayer_mode:
                     self._render_other_players()
                 action = self.ui_manager.render_pause_menu()
             else:
@@ -1109,7 +1121,7 @@ class Game:
                                         self.boss_ai, self.player, self.animation_manager,
                                         self.ability_manager, self.save_data)
                 # Render other players in multiplayer
-                if self.mode == GameMode.MULTIPLAYER:
+                if self.is_multiplayer_mode:
                     self._render_other_players()
         
         elif self.game_state.screen_state == "VICTORY":
@@ -1122,13 +1134,19 @@ class Game:
         if action:
             self._handle_ui_action(action)
         
+        # If we used a game surface for screen shake, blit it with offset
+        if original_screen is not None:
+            self.screen = original_screen
+            self.renderer.screen = original_screen
+            original_screen.blit(game_surface, (shake_x, shake_y))
+
         # Always render console on top
         self.console.render(self.screen)
-        
+
         # Debug stats
         if self.admin_state.show_stats:
             self._render_debug_stats()
-        
+
         pygame.display.flip()
     
     def _render_other_players(self):
@@ -1163,7 +1181,7 @@ class Game:
             f"Mode: {self.mode.value}",
         ]
         
-        if self.mode == GameMode.MULTIPLAYER:
+        if self.is_multiplayer_mode:
             stats.append(f"Players: {len(self.other_players) + 1}")
             stats.append(f"Bots: {self.get_bot_count()}")
             if self.network_client:

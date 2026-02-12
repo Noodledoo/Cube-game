@@ -345,21 +345,10 @@ class GameServer:
                 
                 message = deserialize_message(message_data)
                 if message:
-                    print(f"Server: Received message type {message.type.name} from player {player_id}, data: {message.data}")
-                    import sys
-                    sys.stdout.flush()
                     self._handle_message(player_id, message)
-                else:
-                    print(f"Warning: Failed to deserialize message from player {player_id}")
-                    import sys
-                    sys.stdout.flush()
-                    
+
         except Exception as e:
             print(f"Client error: {e}")
-            import traceback
-            traceback.print_exc()
-            import sys
-            sys.stdout.flush()
         
         # Cleanup
         with self.players_lock:
@@ -399,14 +388,9 @@ class GameServer:
     
     def _handle_message(self, player_id: str, message: NetworkMessage):
         """Handle a message from a player"""
-        import sys
-        print(f"Server: Handling message type {message.type.name} from player {player_id}", flush=True)
-        sys.stdout.flush()
         with self.players_lock:
             player = self.players.get(player_id)
             if not player:
-                print(f"Warning: Player {player_id} not found in players dict", flush=True)
-                sys.stdout.flush()
                 return
         
         if message.type == MessageType.PLAYER_JOIN:
@@ -454,8 +438,6 @@ class GameServer:
         
         elif message.type == MessageType.CHAT:
             chat_message = message.data.get("message", "")[:200]
-            print(f"Server: Broadcasting chat from {player.name}: {chat_message}")
-            # Broadcast to all players including sender (so they see their own message)
             self._broadcast(MessageType.CHAT, {
                 "sender": player.name,
                 "message": chat_message
@@ -476,22 +458,11 @@ class GameServer:
             })
         
         elif message.type == MessageType.ADD_BOT:
-            # Admin command to add bot
-            import sys
             bot_name = message.data.get("name")
-            print(f"*** ADD_BOT HANDLER CALLED ***", flush=True)
-            print(f"Received ADD_BOT request for: {bot_name}", flush=True)
-            sys.stdout.flush()
-            bot_id = self.add_bot(bot_name)
-            print(f"Bot added with ID: {bot_id}", flush=True)
-            sys.stdout.flush()
-            print(f"Current bot count: {len(self.bots)}, total players: {len(self.players)}", flush=True)
-            sys.stdout.flush()
-        
+            self.add_bot(bot_name)
+
         elif message.type == MessageType.REMOVE_BOT:
-            # Admin command to remove bot
             bot_id = message.data.get("bot_id")
-            print(f"Received REMOVE_BOT request for: {bot_id}")
             self.remove_bot(bot_id)
         
         elif message.type == MessageType.START_GAME:
@@ -577,7 +548,7 @@ class GameServer:
         # Import here to avoid circular dependencies, and it works because
         # bootstrap ensures package root is in sys.path
         try:
-            from game.scaling import ScalingFormulas
+            from scaling import ScalingFormulas
             self.game_state.boss_max_hp = ScalingFormulas.boss_hp(self.game_state.level)
         except (ImportError, AttributeError) as e:
             # Fallback scaling if import fails (shouldn't happen with bootstrap)
