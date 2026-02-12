@@ -12,10 +12,6 @@ import argparse
 import os
 
 # Bootstrap: Ensure package root is in sys.path for IDE execution
-# When main.py is run directly, we need cube_boss_fight/ in sys.path
-# so that imports like "from game.states import ..." work correctly.
-# This works whether run as: python main.py, python cube_boss_fight/main.py,
-# or via IDE Run button from any working directory.
 _file_path = os.path.abspath(__file__)
 _package_root = os.path.dirname(_file_path)  # Directory containing main.py (cube_boss_fight/)
 _package_root_resolved = os.path.normpath(_package_root)
@@ -25,26 +21,23 @@ _sys_path_normalized = [os.path.normpath(p) for p in sys.path if p]
 if _package_root_resolved not in _sys_path_normalized:
     sys.path.insert(0, _package_root_resolved)
 
-# Import from game module
-from game.states import GameState, PlayerState, BossState, AdminState
-from game.admin_console import AdminConsole
-from game.abilities import AbilityManager, Ability
-from game.animations import AnimationManager
-from game.rendering import Renderer
-from game.boss_ai import BossAI
-from game.player import Player
-from game.ui import UIManager
-from game.scaling import ScalingFormulas
+from states import GameState, PlayerState, BossState, AdminState
+from admin_console import AdminConsole
+from abilities import AbilityManager, Ability
+from animations import AnimationManager
+from rendering import Renderer
+from boss_ai import BossAI
+from player import Player
+from ui import UIManager
+from scaling import ScalingFormulas
 
-# Import from core module
-from core.config import (load_save, save_progress, reset_save, SCREEN_WIDTH, SCREEN_HEIGHT,
-                         load_multiplayer_save, save_multiplayer_progress, update_multiplayer_stats)
-from core.constants import GameMode, SessionState
+from config import (load_save, save_progress, reset_save, SCREEN_WIDTH, SCREEN_HEIGHT,
+                    load_multiplayer_save, save_multiplayer_progress, update_multiplayer_stats)
+from constants import GameMode, SessionState
 
-# Import from network module
-from network.client import NetworkClient, OfflineClient
-from network.server import GameServer
-from network.protocol import MessageType
+from client import NetworkClient, OfflineClient
+from server import GameServer
+from protocol import MessageType
 
 
 class Game:
@@ -677,7 +670,7 @@ class Game:
             
             # Chronoking passive slow
             if "abilities" in self.save_data and self.save_data["abilities"].get("chronoking", 0) > 0:
-                slow_multiplier *= max(0.4, 1 - 0.1 * self.save_data["abilities"]["chronoking"])
+                slow_multiplier *= max(0.4, 1 - 0.1 * self.save_data["abilities"].get("chronoking", 0))
             
             # Time slow upgrade
             if self.save_data["upgrades"]["timeslow"]:
@@ -710,7 +703,7 @@ class Game:
         if self.ability_manager.can_use_ability("timeshatter", now):
             keys = pygame.key.get_pressed()
             if keys[pygame.K_r] and "abilities" in self.save_data and self.save_data["abilities"].get("timeshatter", 0) > 0:
-                stacks = self.save_data["abilities"]["timeshatter"]
+                stacks = self.save_data["abilities"].get("timeshatter", 0)
                 self.time_freeze_active = True
                 self.time_freeze_end = now + 2 + stacks * 0.5
                 self.ability_manager.use_ability("timeshatter", now)
@@ -719,7 +712,7 @@ class Game:
         if self.ability_manager.can_use_ability("shockwave", now):
             keys = pygame.key.get_pressed()
             if keys[pygame.K_f] and "abilities" in self.save_data and self.save_data["abilities"].get("shockwave", 0) > 0:
-                stacks = self.save_data["abilities"]["shockwave"]
+                stacks = self.save_data["abilities"].get("shockwave", 0)
                 radius = 200 + stacks * 30
                 
                 # Clear projectiles in radius

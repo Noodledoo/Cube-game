@@ -98,7 +98,7 @@ def _load_save_from_file(filepath: str, default_data: dict) -> dict:
     try:
         with open(filepath, "r") as f:
             data = json.load(f)
-    except:
+    except (json.JSONDecodeError, OSError):
         return json.loads(json.dumps(default_data))
 
     # Merge with defaults for new fields

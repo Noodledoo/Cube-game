@@ -272,7 +272,7 @@ class Renderer:
         
         # Legendary ability effects
         if save_data["abilities"].get("chronoking", 0) > 0:
-            aura_size = 80 + save_data["abilities"]["chronoking"] * 10 + math.sin(time.time() * 3) * 5
+            aura_size = 80 + save_data["abilities"].get("chronoking", 0) * 10 + math.sin(time.time() * 3) * 5
             pygame.draw.circle(self.screen, (180, 180, 255), (px, int(py_draw)), int(aura_size), 2)
         
         # Main cursor

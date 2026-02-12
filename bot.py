@@ -15,12 +15,8 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 # Bootstrap: Ensure package root is in sys.path for IDE execution
-# When bot.py is run directly, we need cube_boss_fight/ in sys.path
-# so that imports like "from network.protocol import ..." work correctly.
-# File is at: cube_boss_fight/network/bot.py
-# We need: cube_boss_fight/ in sys.path
 _file_path = os.path.abspath(__file__)
-_package_root = os.path.dirname(os.path.dirname(_file_path))  # Up from network/ to cube_boss_fight/
+_package_root = os.path.dirname(_file_path)
 _package_root_resolved = os.path.normpath(_package_root)
 
 # Add to sys.path if not already present (check normalized paths)
@@ -28,7 +24,7 @@ _sys_path_normalized = [os.path.normpath(p) for p in sys.path if p]
 if _package_root_resolved not in _sys_path_normalized:
     sys.path.insert(0, _package_root_resolved)
 
-from network.protocol import (
+from protocol import (
     MessageType, NetworkMessage,
     serialize_message, deserialize_message
 )
@@ -103,7 +99,7 @@ class StandaloneBot:
             try:
                 self._send(MessageType.PLAYER_LEAVE, {"player_id": self.player_id})
                 self.socket.close()
-            except:
+            except OSError:
                 pass
         self.connected = False
     

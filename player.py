@@ -10,7 +10,7 @@ import pygame
 import math
 import time
 import random
-from game.scaling import ScalingFormulas
+from scaling import ScalingFormulas
 
 class Player:
     """Player controller with all abilities"""

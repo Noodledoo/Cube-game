@@ -9,8 +9,8 @@ import time
 from typing import Optional, Dict, Any, Callable, List
 from dataclasses import dataclass
 
-from network.protocol import (
-    MessageType, NetworkMessage, 
+from protocol import (
+    MessageType, NetworkMessage,
     serialize_message, deserialize_message
 )
 
@@ -101,7 +101,7 @@ class NetworkClient:
             if self.socket:
                 try:
                     self.socket.close()
-                except:
+                except OSError:
                     pass
             
             self.connected = False
@@ -202,7 +202,7 @@ class NetworkClient:
                 if not chunk:
                     return None
                 data += chunk
-            except:
+            except OSError:
                 return None
         return data
     
