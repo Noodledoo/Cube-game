@@ -783,36 +783,39 @@ class Game:
             self._handle_victory()
     
     def _apply_singularity_to_boss_projectiles(self, dt):
-        """Apply singularity repulsion to boss projectiles"""
+        """Apply singularity repulsion to boss projectiles - scales with stacks"""
         px, py = self.player_state.x, self.player_state.y
-        
+        stacks = self.save_data["abilities"].get("singularity", 0)
+        radius = 120 + stacks * 30  # 150 at 1 stack, 270 at 5 stacks
+        strength_mult = 0.7 + stacks * 0.3  # 1.0 at 1 stack, 2.2 at 5 stacks
+
         # Repel regular lasers
         for laser in self.boss_ai.lasers:
             dx_to_player = px - laser["x"]
             dy_to_player = py - laser["y"]
             dist_to_player = math.hypot(dx_to_player, dy_to_player)
-            if dist_to_player < 150 and dist_to_player > 0:
-                repel_strength = (150 - dist_to_player) / 150 * 100
+            if 0 < dist_to_player < radius:
+                repel_strength = (radius - dist_to_player) / radius * 100 * strength_mult
                 laser["vx"] -= (dx_to_player / dist_to_player) * repel_strength * dt
                 laser["vy"] -= (dy_to_player / dist_to_player) * repel_strength * dt
-        
+
         # Repel homing missiles
         for missile in self.boss_ai.homing_missiles:
             dx_to_player = px - missile["x"]
             dy_to_player = py - missile["y"]
             dist_to_player = math.hypot(dx_to_player, dy_to_player)
-            if dist_to_player < 150 and dist_to_player > 0:
-                repel_strength = (150 - dist_to_player) / 150 * 100
+            if 0 < dist_to_player < radius:
+                repel_strength = (radius - dist_to_player) / radius * 100 * strength_mult
                 repel_angle = math.atan2(-dy_to_player, -dx_to_player)
                 missile["angle"] += (repel_angle - missile["angle"]) * 0.1 * dt
-        
+
         # Repel spiral lasers
         for spiral in self.boss_ai.spiral_lasers:
             dx_to_player = px - spiral["x"]
             dy_to_player = py - spiral["y"]
             dist_to_player = math.hypot(dx_to_player, dy_to_player)
-            if dist_to_player < 150 and dist_to_player > 0:
-                repel_strength = (150 - dist_to_player) / 150 * 50
+            if 0 < dist_to_player < radius:
+                repel_strength = (radius - dist_to_player) / radius * 50 * strength_mult
                 spiral["angle"] += repel_strength * dt * 0.1
     
     def _check_boss_charge_collision(self):

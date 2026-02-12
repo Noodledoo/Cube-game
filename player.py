@@ -56,10 +56,19 @@ class Player:
             self.player_state.hp < self.player_state.max_hp * 0.3
         )
         
+        # Recalculate max HP to account for real-time ability changes (chaos_bargain)
+        hp_bonus = (self.save_data["upgrades"]["health"] - 1) * 25
+        golden_bonus = (self.save_data["upgrades"]["goldenheart"] - 1) * 50
+        chaos_penalty = self.save_data["abilities"].get("chaos_bargain", 0) * 5
+        new_max_hp = 100 + hp_bonus + golden_bonus - chaos_penalty
+
         # God mode check
-        if self.save_data["upgrades"]["godmode"] and self.player_state.max_hp < 500:
-            self.player_state.max_hp = 500
-            self.player_state.hp = min(self.player_state.hp, 500)
+        if self.save_data["upgrades"]["godmode"] and new_max_hp < 500:
+            new_max_hp = 500
+
+        if new_max_hp != self.player_state.max_hp:
+            self.player_state.max_hp = new_max_hp
+            self.player_state.hp = min(self.player_state.hp, self.player_state.max_hp)
     
     def _update_movement(self, dt):
         """Update player movement"""
@@ -106,6 +115,11 @@ class Player:
             self.player_state.x = 800 - self.player_state.x
             self.player_state.y = 600 - self.player_state.y
             self.animation_manager.trigger_teleport(self.player_state.x, self.player_state.y)
+            # Stacking grants brief invincibility after teleport
+            if ability.stacks >= 2:
+                i_frames = 0.3 + (ability.stacks - 2) * 0.15  # 0.3s at 2 stacks, up to 0.75s at 5
+                self.player_state.invincible = True
+                self.player_state.invincible_timer = i_frames
         
         elif name == "dash":
             # Dash away from boss
@@ -222,17 +236,6 @@ class Player:
     def _update_projectiles(self, dt, boss_state):
         """Update all player projectiles - FIXED VERSION"""
         for proj in self.projectiles[:]:
-            # Singularity effect - repel bullets AWAY from player
-            if self.save_data["abilities"].get("singularity", 0) > 0:
-                dx_to_player = self.player_state.x - proj["x"]
-                dy_to_player = self.player_state.y - proj["y"]
-                dist_to_player = math.hypot(dx_to_player, dy_to_player)
-                if dist_to_player < 150 and dist_to_player > 0:
-                    repel_strength = (150 - dist_to_player) / 150 * 100
-                    # Repel away from player
-                    proj["vx"] -= (dx_to_player / dist_to_player) * repel_strength * dt
-                    proj["vy"] -= (dy_to_player / dist_to_player) * repel_strength * dt
-            
             # FIX: Improved homing behavior
             if proj.get("homing") and not proj.get("has_hit_boss"):
                 dx = boss_state.x - proj["x"]
