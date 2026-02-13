@@ -114,7 +114,7 @@ class AdminConsole:
         
         self.cursor_blink_timer += dt
     
-    def handle_event(self, event: pygame.Event) -> bool:
+    def handle_event(self, event: pygame.event) -> bool:
         """Handle input events. Returns True if event was consumed."""
         if not self.visible:
             return False
