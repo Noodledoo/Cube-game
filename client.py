@@ -112,26 +112,19 @@ class NetworkClient:
     def send(self, msg_type: MessageType, data: Dict[str, Any]) -> bool:
         """Send a message to the server"""
         if not self.connected or not self.socket:
-            print(f"Client send failed: connected={self.connected}, socket={self.socket is not None}")
             return False
-        
+
         try:
             message = NetworkMessage(msg_type, data, self.player_id or "")
             encoded = serialize_message(message)
-            
-            print(f"Client: Sending message type {msg_type.name}, size {len(encoded)} bytes")
-            
-            # Send length prefix then data
+
             length = len(encoded)
             self.socket.sendall(length.to_bytes(4, 'big'))
             self.socket.sendall(encoded)
-            print(f"Client: Message sent successfully")
             return True
-            
+
         except Exception as e:
             print(f"Send error: {e}")
-            import traceback
-            traceback.print_exc()
             self.disconnect()
             return False
     

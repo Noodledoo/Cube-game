@@ -56,10 +56,19 @@ class Player:
             self.player_state.hp < self.player_state.max_hp * 0.3
         )
         
+        # Recalculate max HP to account for real-time ability changes (chaos_bargain)
+        hp_bonus = (self.save_data["upgrades"]["health"] - 1) * 25
+        golden_bonus = (self.save_data["upgrades"]["goldenheart"] - 1) * 50
+        chaos_penalty = self.save_data["abilities"].get("chaos_bargain", 0) * 5
+        new_max_hp = 100 + hp_bonus + golden_bonus - chaos_penalty
+
         # God mode check
-        if self.save_data["upgrades"]["godmode"] and self.player_state.max_hp < 500:
-            self.player_state.max_hp = 500
-            self.player_state.hp = min(self.player_state.hp, 500)
+        if self.save_data["upgrades"]["godmode"] and new_max_hp < 500:
+            new_max_hp = 500
+
+        if new_max_hp != self.player_state.max_hp:
+            self.player_state.max_hp = new_max_hp
+            self.player_state.hp = min(self.player_state.hp, self.player_state.max_hp)
     
     def _update_movement(self, dt):
         """Update player movement"""
@@ -106,6 +115,11 @@ class Player:
             self.player_state.x = 800 - self.player_state.x
             self.player_state.y = 600 - self.player_state.y
             self.animation_manager.trigger_teleport(self.player_state.x, self.player_state.y)
+            # Stacking grants brief invincibility after teleport
+            if ability.stacks >= 2:
+                i_frames = 0.3 + (ability.stacks - 2) * 0.15  # 0.3s at 2 stacks, up to 0.75s at 5
+                self.player_state.invincible = True
+                self.player_state.invincible_timer = i_frames
         
         elif name == "dash":
             # Dash away from boss
@@ -156,6 +170,8 @@ class Player:
         cd = max(0.08, 0.35 - (self.save_data["upgrades"]["firerate"] - 1) * 0.07)
         if self.save_data["upgrades"]["rapid"]:
             cd *= 0.5
+        if self.save_data["upgrades"]["bulletstorm"]:
+            cd *= 0.35
         if self.save_data["upgrades"]["infiniteammo"]:
             cd = 0.02
         
@@ -174,15 +190,17 @@ class Player:
         chaos_bonus = self.ability_manager.get_ability_stacks("chaos_bargain") * 10
         
         dmg = base_dmg + ultra_bonus + level_bonus + chaos_bonus
-        
+
+        # Damage multipliers stack additively to prevent exponential scaling
+        # e.g. berserker(+100%) + crit(+100%) = 3x total, not 4x
+        bonus_mult = 0.0
         if self.player_state.berserker_active:
-            dmg *= 2
-        
+            bonus_mult += 1.0  # +100% damage
+        if self.save_data["upgrades"]["crit"] and random.random() < 0.25:
+            bonus_mult += 1.0  # +100% damage on crit
         if self.save_data["upgrades"]["berserker_sqr"] and self.player_state.hp < self.player_state.max_hp * 0.1:
-            dmg = dmg ** 1.5
-        
-        if self.save_data["upgrades"]["crit"] and time.time() % 0.25 < 0.06:  # 25% chance
-            dmg *= 2
+            bonus_mult += 2.0  # +200% damage at critical HP
+        dmg *= (1.0 + bonus_mult)
         
         base_speed = 700 + (self.save_data["upgrades"]["speed"] - 1) * 100
         
@@ -203,69 +221,65 @@ class Player:
         else:
             shots = [0]
         
+        is_homing = self.save_data["upgrades"]["homingrounds"]
         for offset in shots:
             self.projectiles.append({
                 "x": self.player_state.x,
                 "y": self.player_state.y,
                 "vx": math.cos(angle + offset) * base_speed,
                 "vy": math.sin(angle + offset) * base_speed,
-                "dmg": dmg,
+                "dmg": dmg * 0.55 if is_homing else dmg,  # 45% damage penalty for guaranteed hits
                 "piercing": self.save_data["upgrades"]["piercing"],
                 "explosive": self.save_data["upgrades"]["explosive"],
                 "nuclear": self.save_data["upgrades"]["nuclearshot"],
-                "homing": self.save_data["upgrades"]["homingrounds"],
-                "has_hit_boss": False  # FIX: Track if bullet has hit boss
+                "homing": is_homing,
+                "has_hit_boss": False,
+                "age": 0.0,  # Track bullet lifetime for homing decay
             })
     
     def _update_projectiles(self, dt, boss_state):
-        """Update all player projectiles - FIXED VERSION"""
+        """Update all player projectiles"""
         for proj in self.projectiles[:]:
-            # Singularity effect - repel bullets AWAY from player
-            if self.save_data["abilities"].get("singularity", 0) > 0:
-                dx_to_player = self.player_state.x - proj["x"]
-                dy_to_player = self.player_state.y - proj["y"]
-                dist_to_player = math.hypot(dx_to_player, dy_to_player)
-                if dist_to_player < 150 and dist_to_player > 0:
-                    repel_strength = (150 - dist_to_player) / 150 * 100
-                    # Repel away from player
-                    proj["vx"] -= (dx_to_player / dist_to_player) * repel_strength * dt
-                    proj["vy"] -= (dy_to_player / dist_to_player) * repel_strength * dt
-            
-            # FIX: Improved homing behavior
+            # Track bullet age
+            proj["age"] = proj.get("age", 0.0) + dt
+
+            # Homing behavior with tracking decay
             if proj.get("homing") and not proj.get("has_hit_boss"):
                 dx = boss_state.x - proj["x"]
                 dy = boss_state.y - proj["y"]
                 dist = math.hypot(dx, dy)
-                
-                # FIX: Only home if not too close to boss (prevents orbiting)
-                if dist > 40:  # Minimum distance threshold
+
+                # Homing effectiveness decays over time (loses tracking after ~2s)
+                age = proj["age"]
+                homing_strength = max(0.0, 1.0 - (age / 2.5) ** 2)
+
+                # Only home if still tracking and not too close (prevents orbiting)
+                if dist > 40 and homing_strength > 0.05:
                     current_angle = math.atan2(proj["vy"], proj["vx"])
                     target_angle = math.atan2(dy, dx)
                     angle_diff = target_angle - current_angle
-                    
-                    # Normalize angle
+
                     while angle_diff > math.pi:
                         angle_diff -= 2 * math.pi
                     while angle_diff < -math.pi:
                         angle_diff += 2 * math.pi
-                    
-                    # FIX: Dynamic turn rate - faster when far, slower when close
-                    # This prevents the tight orbiting behavior
-                    base_turn_rate = 0.25  # Increased from 0.08
+
+                    # Reduced base turn rate (0.15 from 0.25), decays with age
+                    base_turn_rate = 0.15
                     if dist < 100:
-                        # Reduce turn rate when close to prevent orbiting
                         turn_rate = base_turn_rate * (dist / 100)
                     else:
                         turn_rate = base_turn_rate
-                    
+                    turn_rate *= homing_strength
+
                     current_angle += angle_diff * turn_rate
                     speed = math.hypot(proj["vx"], proj["vy"])
                     proj["vx"] = math.cos(current_angle) * speed
                     proj["vy"] = math.sin(current_angle) * speed
-            
+
             proj["x"] += proj["vx"] * dt
             proj["y"] += proj["vy"] * dt
-            
+
             if not (0 <= proj["x"] <= 800 and 0 <= proj["y"] <= 600):
                 self.projectiles.remove(proj)
     

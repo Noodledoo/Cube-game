@@ -274,7 +274,23 @@ class Renderer:
         if save_data["abilities"].get("chronoking", 0) > 0:
             aura_size = 80 + save_data["abilities"].get("chronoking", 0) * 10 + math.sin(time.time() * 3) * 5
             pygame.draw.circle(self.screen, (180, 180, 255), (px, int(py_draw)), int(aura_size), 2)
-        
+
+        # Singularity visual - pulsing purple repulsion field
+        if save_data["abilities"].get("singularity", 0) > 0:
+            stacks = save_data["abilities"].get("singularity", 0)
+            sing_radius = 120 + stacks * 30 + math.sin(time.time() * 4) * 8
+            pulse = abs(math.sin(time.time() * 5))
+            alpha_color = (int(120 + 40 * pulse), 50, int(180 + 40 * pulse))
+            pygame.draw.circle(self.screen, alpha_color, (px, int(py_draw)), int(sing_radius), 1)
+            # Inner ring
+            pygame.draw.circle(self.screen, (160, 80, 220), (px, int(py_draw)), int(sing_radius * 0.6), 1)
+
+        # Chaos bargain visual - red damage glow
+        if save_data["abilities"].get("chaos_bargain", 0) > 0:
+            stacks = save_data["abilities"].get("chaos_bargain", 0)
+            glow_intensity = int(80 + 30 * abs(math.sin(time.time() * 2)))
+            pygame.draw.circle(self.screen, (glow_intensity, 20, 20), (px, int(py_draw)), 22 + stacks, 2)
+
         # Main cursor
         pygame.draw.circle(self.screen, color, (px, int(py_draw)), 15, 4)
         
@@ -404,3 +420,18 @@ class Renderer:
                     pygame.draw.rect(self.screen, (0,255,0), (x, y, 48, 48), 2)
             
             slot += 1
+
+        # Render passive ability indicators below active ones
+        passive_x = hud_x
+        passive_y = hud_y + 58
+        for ability_name, ability in ability_manager.player_abilities.items():
+            if ability.key is not None:
+                continue
+            rarity_color = ability_manager.RARITY_COLORS.get(ability.rarity, (255,255,255))
+            # Small passive indicator
+            pygame.draw.rect(self.screen, (30, 30, 30), (passive_x, passive_y, 36, 20))
+            pygame.draw.rect(self.screen, rarity_color, (passive_x, passive_y, 36, 20), 1)
+            label = ability_name[:4].upper()
+            text = self.font_tiny.render(f"{label}x{ability.stacks}", True, rarity_color)
+            self.screen.blit(text, (passive_x + 2, passive_y + 2))
+            passive_x += 42

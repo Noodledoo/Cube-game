@@ -92,7 +92,7 @@ class BossAI:
                 angle_diff -= 2 * math.pi
             while angle_diff < -math.pi:
                 angle_diff += 2 * math.pi
-            missile["angle"] += angle_diff * 0.05
+            missile["angle"] += angle_diff * 0.07
             missile["x"] += math.cos(missile["angle"]) * missile["speed"] * dt
             missile["y"] += math.sin(missile["angle"]) * missile["speed"] * dt
             if not (0 <= missile["x"] <= 800 and 0 <= missile["y"] <= 800):
@@ -190,8 +190,8 @@ class BossAI:
             laser_cd = ScalingFormulas.boss_fire_delay(level, 2.0, 0.5)  # Reduced from 2.5, min 0.5
         
         if now - self.boss_state.last_laser > laser_cd:
-            # FIX: Allow lasers during spray but reduce count
-            count = 3 if level < 3 else 5 if level < 10 else min(12, 7 + level // 12)
+            # Allow lasers during spray but reduce count
+            count = 3 if level < 3 else 4 if level < 6 else 6 if level < 10 else min(14, 7 + level // 8)
             if spray_active:
                 count = max(2, count // 2)  # Reduced during spray but still fires
             
@@ -211,8 +211,8 @@ class BossAI:
                 })
             self.boss_state.last_laser = now
         
-        # Charge attack
-        charge_cd = ScalingFormulas.boss_fire_delay(level, 7.0, 2.0)
+        # Charge attack - more frequent at higher levels
+        charge_cd = ScalingFormulas.boss_fire_delay(level, 6.0, 1.5)
         if not self.boss_state.charging and now - self.boss_state.last_charge > charge_cd and not spray_active:
             self.boss_state.charging = True
             self.boss_state.returning_to_center = False
@@ -226,23 +226,23 @@ class BossAI:
                 self.animation_manager.spawn("charge_warning", self.boss_state.x, self.boss_state.y, lifetime=1.0)
             self.boss_state.last_charge = now
         
-        # Homing missiles (level 8+)
-        if level >= 8:
-            homing_cd = ScalingFormulas.boss_fire_delay(level, 6.0, 2.5)
+        # Homing missiles (level 6+, was 8+)
+        if level >= 6:
+            homing_cd = ScalingFormulas.boss_fire_delay(level, 5.0, 1.8)
             if now - self.boss_state.last_homing > homing_cd and not spray_active:
-                count = 2 if level < 15 else 3 if level < 25 else min(8, 4 + level // 20)
+                count = 1 if level < 10 else 2 if level < 15 else 3 if level < 25 else min(6, 3 + level // 20)
                 for _ in range(count):
                     angle = math.radians(random.randint(0, 360))
                     self.homing_missiles.append({
                         "x": self.boss_state.x,
                         "y": self.boss_state.y,
                         "angle": angle,
-                        "speed": ScalingFormulas.projectile_speed(level, 200)
+                        "speed": ScalingFormulas.projectile_speed(level, 220)
                     })
                 self.boss_state.last_homing = now
-        
-        # Spiral lasers (level 20+)
-        if level >= 20:
+
+        # Spiral lasers (level 15+, was 20+)
+        if level >= 15:
             spiral_cd = ScalingFormulas.boss_fire_delay(level, 8.0, 3.0)
             if now - self.boss_state.last_spiral > spiral_cd and not spray_active:
                 self.boss_charging_ability = True
@@ -260,8 +260,8 @@ class BossAI:
                     })
                 self.boss_state.last_spiral = now
         
-        # Wave attack (level 15+)
-        if level >= 15 or is_super:
+        # Wave attack (level 10+, was 15+)
+        if level >= 10 or is_super:
             wave_cd = ScalingFormulas.boss_fire_delay(level, 5.0, 2.0)
             if now - self.boss_state.last_wave > wave_cd and not spray_active:
                 self.boss_charging_ability = True
@@ -281,8 +281,8 @@ class BossAI:
                     })
                 self.boss_state.last_wave = now
         
-        # Rapid fire (level 30+)
-        if level >= 30:
+        # Rapid fire (level 22+, was 30+)
+        if level >= 22:
             rapid_cd = ScalingFormulas.boss_fire_delay(level, 10.0, 4.0)
             if now - self.boss_state.last_rapid > rapid_cd and not spray_active:
                 self.boss_charging_ability = True
@@ -299,8 +299,8 @@ class BossAI:
                     })
                 self.boss_state.last_rapid = now
         
-        # FIX: Spray bullets (level 25+) - with lockout to prevent chaining
-        if level >= 25:
+        # Spray bullets (level 20+, was 25+) - with lockout to prevent chaining
+        if level >= 20:
             # Calculate cooldown - ensure it's always longer than total spray cycle
             base_spray_cd = ScalingFormulas.boss_fire_delay(level, 12.0, 6.0)
             
@@ -351,8 +351,8 @@ class BossAI:
                 
                 self.boss_state.last_spray = now
         
-        # Chasing laser (level 35+)
-        if level >= 35:
+        # Chasing laser (level 28+, was 35+)
+        if level >= 28:
             chasing_cd = ScalingFormulas.boss_fire_delay(level, 15.0, 8.0)
             if now - self.boss_state.last_chasing > chasing_cd and len(self.spray_bullets) == 0:
                 chasing_duration = 6.0 if not is_super else 8.0

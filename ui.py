@@ -93,7 +93,7 @@ class UIManager:
             elif event.key == pygame.K_RETURN:
                 if self.admin_input == "ilovenoodledoo":
                     save_data["settings"]["admin"] = True
-                    from core.config import save_progress
+                    from config import save_progress
                     save_progress(save_data)
                     self.admin_input = ""
                     return {"type": "change_state", "state": "MENU"}
@@ -102,8 +102,8 @@ class UIManager:
             elif len(self.admin_input) < 20 and event.unicode.isprintable():
                 self.admin_input += event.unicode
         
-        # Multiplayer lobby input
-        if game_state.screen_state in ["MULTIPLAYER_LOBBY", "PVP_LOBBY"] and event.type == pygame.KEYDOWN:
+        # Multiplayer lobby input (only when a field is active)
+        if game_state.screen_state in ["MULTIPLAYER_LOBBY", "PVP_LOBBY"] and event.type == pygame.KEYDOWN and self.active_input_field:
             return self._handle_lobby_input(event)
         
         return None
@@ -240,6 +240,7 @@ class UIManager:
             "disconnected": (150, 150, 150),
             "connecting": (255, 200, 0),
             "connected": (0, 255, 0),
+            "hosting": (100, 255, 100),
             "error": (255, 0, 0)
         }.get(self.connection_status, (150, 150, 150))
         
@@ -342,6 +343,7 @@ class UIManager:
             "disconnected": (150, 150, 150),
             "connecting": (255, 200, 0),
             "connected": (0, 255, 0),
+            "hosting": (100, 255, 100),
             "error": (255, 0, 0)
         }.get(self.connection_status, (150, 150, 150))
         
@@ -783,7 +785,7 @@ class UIManager:
         title = self.font_big.render(title_text, True, title_color)
         self.screen.blit(title, (80 if is_super else 120, int(title_y)))
         
-        from game.scaling import ScalingFormulas
+        from scaling import ScalingFormulas
         coin_reward = ScalingFormulas.coin_reward(game_state.level)
         
         coins = self.font_med.render(f"+{coin_reward} coins!", True, (255, 215, 0))
